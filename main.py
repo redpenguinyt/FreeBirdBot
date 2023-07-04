@@ -10,22 +10,42 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 SONG_PATH = "freebird.mp3"
 playing: list[tuple[datetime]] = {}
 
+AUTO_JOIN_USER = 666323445453291561
+
 def get_playing_seconds(guild: discord.Guild):
 	time_playing: timedelta = datetime.now() - playing[guild.id]
 	return round(time_playing.total_seconds())
 
-def play(ctx: commands.Context, vc: discord.VoiceClient):
-	while playing[ctx.guild.id] is not None:
-		print(f"Playing free bird in guild {ctx.guild.id}")
+def play(guild: discord.Guild, vc: discord.VoiceClient):
+	while playing[guild.id] is not None:
+		print(f"Playing free bird in guild {guild.id}")
 		free_bird = discord.FFmpegPCMAudio(source=SONG_PATH)
 		vc.play(free_bird)
 		while vc.is_playing() and vc.is_connected():
 			sleep(1)
-			if playing[ctx.guild.id] is None:
+			if playing[guild.id] is None:
 				break
 
 		vc.stop()
 		sleep(1)
+
+async def join_voice_channel(guild: discord.Guild, user_id: discord.User):
+	member = guild.get_member(user_id)
+	if member is None:
+		return 2
+	voice_state = member.voice
+	if voice_state != None and playing[guild.id] is None:
+		voice_channel = voice_state.channel
+		vc = await voice_channel.connect(timeout=2**32)
+		playing[guild.id] = datetime.now()
+
+		t = threading.Thread(target=play, args=(guild, vc))
+		t.start()
+
+		return 0
+
+	else:
+		return 1
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -43,21 +63,23 @@ async def on_ready():
 		playing[guild.id] = None
 	print(f"Logged in as {bot.user.name} | {len(bot.guilds)} servers")
 
+	if AUTO_JOIN_USER:
+		for guild in bot.guilds:
+			error = await join_voice_channel(guild, AUTO_JOIN_USER)
+			if error == 0:
+				break
+
 @bot.command(help="Begin the free bird loop")
 async def begin(ctx: commands.Context):
-	voice_state = ctx.author.voice
-	if voice_state != None and playing[ctx.guild.id] is None:
-		voice_channel = voice_state.channel
-		vc = await voice_channel.connect(timeout=2**32)
-		playing[ctx.guild.id] = datetime.now()
+	error = await join_voice_channel(ctx.guild, ctx.author.id)
 
-		await ctx.reply("The free bird is here :O")
-
-		t = threading.Thread(target=play, args=(ctx, vc))
-		t.start()
-
-	else:
-		await ctx.reply("The free bird has nowhere to go :/")
+	match error:
+		case 0:
+			await ctx.reply("The free bird is here :O")
+		case 1:
+			await ctx.reply("The free bird has nowhere to go :/")
+		case 2:
+			raise "Member not found"
 
 @bot.command(help="Stop the free bird loop")
 async def stop(ctx: commands.Context):
