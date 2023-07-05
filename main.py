@@ -90,7 +90,9 @@ async def stop(ctx: commands.Context):
 		if vc.guild.id == ctx.guild.id:
 			await vc.disconnect()
 
-	await ctx.reply(f"The free bird is gone :( Final time stat: {time_playing}s")
+			return await ctx.reply(f"The free bird is gone :( Final time stat: {time_playing}s")
+
+	await ctx.reply("No free bird found in this server >:O")
 
 @bot.command(help="Show how long the bot has been running for")
 async def stats(ctx: commands.Context):
